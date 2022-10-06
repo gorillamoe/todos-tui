@@ -1,0 +1,33 @@
+{
+  "todos": [
+    {
+      "title": "Write Tests",
+      "description": "Write some good unit-tests"
+    },
+    {
+      "title": "Make resize work",
+      "description": "Fix buggy resize-events.."
+    },
+    {
+      "title": "Startup faster",
+      "description": "Make startup faster"
+    }
+  ],
+  "in_progress": [
+    {
+      "title": "Sync with filesytem",
+      "description": "Make it sync with filesytem"
+    },
+    {
+      "title": "Keyboard shortcuts",
+      "description": "Make the keyboard shortcuts pretty and useful"
+    }
+  ],
+  "done": [
+    {
+      "title": "Load from filesytem",
+      "description": "Make it load from filesytem"
+    }
+  ]
+}
+

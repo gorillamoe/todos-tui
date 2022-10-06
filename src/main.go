@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -42,6 +43,8 @@ var (
 			Foreground(lipgloss.Color("241"))
 )
 
+var configFile = "todos.json"
+
 /* CUSTOM ITEM */
 
 type Task struct {
@@ -50,8 +53,41 @@ type Task struct {
 	description string
 }
 
+type ConfigItem struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+type Config struct {
+	Todos      []ConfigItem `json:"todos"`
+	InProgress []ConfigItem `json:"in_progress"`
+	Done       []ConfigItem `json:"done"`
+}
+
+func loadConfig() (Config, error) {
+	config := Config{}
+	file, err := os.Open(configFile)
+	if err != nil {
+		return config, error(err)
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		return config, error(err)
+	}
+	return config, nil
+}
+
 func NewTask(status status, title, description string) Task {
 	return Task{status: status, title: title, description: description}
+}
+
+func (m *Model) Delete() tea.Msg {
+	selectedItem := m.lists[m.focused].SelectedItem()
+	selectedTask := selectedItem.(Task)
+	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
+	return nil
 }
 
 func (t *Task) Next() {
@@ -94,7 +130,7 @@ func (m *Model) MoveToNext() tea.Msg {
 	selectedTask := selectedItem.(Task)
 	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
 	selectedTask.Next()
-	m.lists[selectedTask.status].InsertItem(len(m.lists[selectedTask.status].Items())-1, list.Item(selectedTask))
+	m.lists[selectedTask.status].InsertItem(len(m.lists[selectedTask.status].Items()), list.Item(selectedTask))
 	return nil
 }
 
@@ -115,27 +151,33 @@ func (m *Model) Prev() {
 }
 
 func (m *Model) initLists(width, height int) {
+	config, err := loadConfig()
+	if err != nil {
+		panic(err)
+	}
 	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height/2)
 	defaultList.SetShowHelp(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
 
 	// Init To Do
 	m.lists[todo].Title = "To Do"
-	m.lists[todo].SetItems([]list.Item{
-		Task{status: todo, title: "buy milk", description: "strawberry milk"},
-		Task{status: todo, title: "eat sushi", description: "negitoro roll, miso soup, rice"},
-		Task{status: todo, title: "fold laundry", description: "or wear wrinkly t-shirts"},
-	})
+	// for _, item := range config.Todos {
+	for i := len(config.Todos) - 1; i >= 0; i-- {
+		item := config.Todos[i]
+		m.lists[todo].InsertItem(0, list.Item(NewTask(todo, item.Title, item.Description)))
+	}
 	// Init in progress
 	m.lists[inProgress].Title = "In Progress"
-	m.lists[inProgress].SetItems([]list.Item{
-		Task{status: todo, title: "write code", description: "don't worry, it's Go"},
-	})
+	for i := len(config.InProgress) - 1; i >= 0; i-- {
+		item := config.InProgress[i]
+		m.lists[inProgress].InsertItem(0, list.Item(NewTask(inProgress, item.Title, item.Description)))
+	}
 	// Init done
 	m.lists[done].Title = "Done"
-	m.lists[done].SetItems([]list.Item{
-		Task{status: todo, title: "stay cool", description: "as a cucumber"},
-	})
+	for i := len(config.Done) - 1; i >= 0; i-- {
+		item := config.Done[i]
+		m.lists[done].InsertItem(0, list.Item(NewTask(done, item.Title, item.Description)))
+	}
 }
 
 func (m Model) Init() tea.Cmd {
@@ -158,11 +200,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			m.quitting = true
 			return m, tea.Quit
+		case "D":
+			return m, m.Delete
 		case "left", "h":
 			m.Prev()
 		case "right", "l":
 			m.Next()
-		case "enter":
+		case "shift+right", "L":
 			return m, m.MoveToNext
 		case "n":
 			models[model] = m // save the state of the current model
