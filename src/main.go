@@ -173,10 +173,7 @@ func (m *Model) Prev() {
 }
 
 func (m *Model) initLists(width, height int) {
-	config, err := loadConfig()
-	if err != nil {
-		panic(err)
-	}
+	config, _ := loadConfig()
 	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height/2)
 	defaultList.SetShowHelp(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
