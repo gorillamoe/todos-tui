@@ -6,15 +6,13 @@ import (
 	"os"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type status int
 
-const divisor = 4
+const divisor = 3
 
 const (
 	todo status = iota
@@ -22,7 +20,6 @@ const (
 	done
 )
 
-/* MODEL MANAGEMENT */
 var models []tea.Model
 
 const (
@@ -30,39 +27,7 @@ const (
 	form
 )
 
-/* STYLING */
-var (
-	columnStyle = lipgloss.NewStyle().
-			Padding(1, 2).
-			Border(lipgloss.HiddenBorder())
-	focusedStyle = lipgloss.NewStyle().
-			Padding(1, 2).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62"))
-	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241"))
-)
-
 var configFile = "todos.json"
-
-/* CUSTOM ITEM */
-
-type Task struct {
-	status      status
-	title       string
-	description string
-}
-
-type ConfigItem struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-}
-
-type Config struct {
-	Todos      []ConfigItem `json:"todos"`
-	InProgress []ConfigItem `json:"in_progress"`
-	Done       []ConfigItem `json:"done"`
-}
 
 func (m *Model) Save() tea.Msg {
 	config := Config{}
@@ -111,6 +76,14 @@ func (m *Model) Delete() tea.Msg {
 	return nil
 }
 
+func (t *Task) Prev() {
+	if t.status == todo {
+		t.status = done
+	} else {
+		t.status--
+	}
+}
+
 func (t *Task) Next() {
 	if t.status == done {
 		t.status = todo
@@ -132,18 +105,18 @@ func (t Task) Description() string {
 	return t.description
 }
 
-/* MAIN MODEL */
-
-type Model struct {
-	loaded   bool
-	focused  status
-	lists    []list.Model
-	err      error
-	quitting bool
-}
-
 func New() *Model {
 	return &Model{}
+}
+
+func (m *Model) MoveToPrev() tea.Msg {
+	selectedItem := m.lists[m.focused].SelectedItem()
+	selectedTask := selectedItem.(Task)
+	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
+	selectedTask.Prev()
+	m.lists[selectedTask.status].InsertItem(len(m.lists[selectedTask.status].Items()), list.Item(selectedTask))
+	m.Save()
+	return nil
 }
 
 func (m *Model) MoveToNext() tea.Msg {
@@ -206,12 +179,18 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		h, v := columnStyle.GetFrameSize()
+		globals.vh = msg.Height - v
+		globals.vw = msg.Width - h
+		columnStyle.Width(globals.vw / divisor)
+		focusedStyle.Width(globals.vw / divisor)
+		columnStyle.Height(globals.vh)
+		focusedStyle.Height(globals.vh)
+		for _, list := range m.lists {
+			list.SetSize(globals.vw/divisor, globals.vh)
+		}
 		if !m.loaded {
-			columnStyle.Width(msg.Width / divisor)
-			focusedStyle.Width(msg.Width / divisor)
-			columnStyle.Height(msg.Height - divisor)
-			focusedStyle.Height(msg.Height - divisor)
-			m.initLists(msg.Width, msg.Height)
+			m.initLists(globals.vw, globals.vh)
 			m.loaded = true
 		}
 	case tea.KeyMsg:
@@ -225,6 +204,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Prev()
 		case "right", "l":
 			m.Next()
+		case "shift+left", "H":
+			return m, m.MoveToPrev
 		case "shift+right", "L":
 			return m, m.MoveToNext
 		case "n":
@@ -277,61 +258,6 @@ func (m Model) View() string {
 	} else {
 		return "loading..."
 	}
-}
-
-/* FORM MODEL */
-type Form struct {
-	focused     status
-	title       textinput.Model
-	description textarea.Model
-}
-
-func NewForm(focused status) *Form {
-	form := &Form{focused: focused}
-	form.title = textinput.New()
-	form.title.Focus()
-	form.description = textarea.New()
-	return form
-}
-
-func (m Form) CreateTask() tea.Msg {
-	task := NewTask(m.focused, m.title.Value(), m.description.Value())
-	return task
-}
-
-func (m Form) Init() tea.Cmd {
-	return nil
-}
-
-func (m Form) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			return m, tea.Quit
-		case "enter":
-			if m.title.Focused() {
-				m.title.Blur()
-				m.description.Focus()
-				return m, textarea.Blink
-			} else {
-				models[form] = m
-				return models[model], m.CreateTask
-			}
-		}
-	}
-	if m.title.Focused() {
-		m.title, cmd = m.title.Update(msg)
-		return m, cmd
-	} else {
-		m.description, cmd = m.description.Update(msg)
-		return m, cmd
-	}
-}
-
-func (m Form) View() string {
-	return lipgloss.JoinVertical(lipgloss.Left, m.title.View(), m.description.View())
 }
 
 func main() {
