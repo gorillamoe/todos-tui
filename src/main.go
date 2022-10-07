@@ -28,6 +28,7 @@ const (
 )
 
 var configFile = "todos.json"
+var config Config
 
 func (m *Model) Save() tea.Msg {
 	config := Config{}
@@ -145,31 +146,42 @@ func (m *Model) Prev() {
 	}
 }
 
-func (m *Model) initLists(width, height int) {
-	config, _ := loadConfig()
-	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), width/divisor, height/2)
+func (m *Model) initLists() {
+	defaultList := list.New([]list.Item{}, list.NewDefaultDelegate(), 5, 5)
 	defaultList.SetShowHelp(false)
 	m.lists = []list.Model{defaultList, defaultList, defaultList}
-
-	// Init To Do
 	m.lists[todo].Title = "To Do"
-	// for _, item := range config.Todos {
 	for i := len(config.Todos) - 1; i >= 0; i-- {
 		item := config.Todos[i]
 		m.lists[todo].InsertItem(0, list.Item(NewTask(todo, item.Title, item.Description)))
 	}
-	// Init in progress
 	m.lists[inProgress].Title = "In Progress"
 	for i := len(config.InProgress) - 1; i >= 0; i-- {
 		item := config.InProgress[i]
 		m.lists[inProgress].InsertItem(0, list.Item(NewTask(inProgress, item.Title, item.Description)))
 	}
-	// Init done
 	m.lists[done].Title = "Done"
 	for i := len(config.Done) - 1; i >= 0; i-- {
 		item := config.Done[i]
 		m.lists[done].InsertItem(0, list.Item(NewTask(done, item.Title, item.Description)))
 	}
+}
+
+func (m Model) onWindowSizeMessage(msg tea.WindowSizeMsg) tea.Msg {
+	h, v := columnStyle.GetFrameSize()
+	globals.vh = msg.Height - v - 1
+	globals.vw = msg.Width - h
+	columnStyle.Width(globals.vw / divisor)
+	focusedStyle.Width(globals.vw / divisor)
+	columnStyle.Height(globals.vh)
+	focusedStyle.Height(globals.vh)
+	m.lists[todo].SetWidth(globals.vw)
+	m.lists[todo].SetHeight(globals.vh)
+	m.lists[inProgress].SetWidth(globals.vw)
+	m.lists[inProgress].SetHeight(globals.vh)
+	m.lists[done].SetWidth(globals.vw)
+	m.lists[done].SetHeight(globals.vh)
+	return nil
 }
 
 func (m Model) Init() tea.Cmd {
@@ -179,20 +191,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		h, v := columnStyle.GetFrameSize()
-		globals.vh = msg.Height - v
-		globals.vw = msg.Width - h
-		columnStyle.Width(globals.vw / divisor)
-		focusedStyle.Width(globals.vw / divisor)
-		columnStyle.Height(globals.vh)
-		focusedStyle.Height(globals.vh)
-		for _, list := range m.lists {
-			list.SetSize(globals.vw/divisor, globals.vh)
-		}
-		if !m.loaded {
-			m.initLists(globals.vw, globals.vh)
-			m.loaded = true
-		}
+		m.onWindowSizeMessage(msg)
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -225,44 +224,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.quitting {
-		return ""
-	}
-	if m.loaded {
-		todoView := m.lists[todo].View()
-		inProgView := m.lists[inProgress].View()
-		doneView := m.lists[done].View()
-		switch m.focused {
-		case inProgress:
-			return lipgloss.JoinHorizontal(
-				lipgloss.Left,
-				columnStyle.Render(todoView),
-				focusedStyle.Render(inProgView),
-				columnStyle.Render(doneView),
-			)
-		case done:
-			return lipgloss.JoinHorizontal(
-				lipgloss.Left,
-				columnStyle.Render(todoView),
-				columnStyle.Render(inProgView),
-				focusedStyle.Render(doneView),
-			)
-		default:
-			return lipgloss.JoinHorizontal(
-				lipgloss.Left,
-				focusedStyle.Render(todoView),
-				columnStyle.Render(inProgView),
-				columnStyle.Render(doneView),
-			)
-		}
-	} else {
-		return "loading..."
+	todoView := m.lists[todo].View()
+	inProgView := m.lists[inProgress].View()
+	doneView := m.lists[done].View()
+	switch m.focused {
+	case inProgress:
+		return lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			columnStyle.Render(todoView),
+			focusedStyle.Render(inProgView),
+			columnStyle.Render(doneView),
+		)
+	case done:
+		return lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			columnStyle.Render(todoView),
+			columnStyle.Render(inProgView),
+			focusedStyle.Render(doneView),
+		)
+	default:
+		return lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			focusedStyle.Render(todoView),
+			columnStyle.Render(inProgView),
+			columnStyle.Render(doneView),
+		)
 	}
 }
 
 func main() {
+	config, _ = loadConfig()
 	models = []tea.Model{New(), NewForm(todo)}
 	m := models[model]
+	model := m.(*Model)
+	model.initLists()
 	p := tea.NewProgram(m)
 	if err := p.Start(); err != nil {
 		fmt.Println(err)
