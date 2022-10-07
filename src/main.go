@@ -64,6 +64,26 @@ type Config struct {
 	Done       []ConfigItem `json:"done"`
 }
 
+func (m *Model) Save() tea.Msg {
+	config := Config{}
+	for _, list := range m.lists {
+		for _, item := range list.Items() {
+			task := item.(Task)
+			switch task.status {
+			case todo:
+				config.Todos = append(config.Todos, ConfigItem{Title: task.title, Description: task.description})
+			case inProgress:
+				config.InProgress = append(config.InProgress, ConfigItem{Title: task.title, Description: task.description})
+			case done:
+				config.Done = append(config.Done, ConfigItem{Title: task.title, Description: task.description})
+			}
+		}
+	}
+	file, _ := json.MarshalIndent(config, "", "  ")
+	_ = os.WriteFile(configFile, file, 0644)
+	return nil
+}
+
 func loadConfig() (Config, error) {
 	config := Config{}
 	file, err := os.Open(configFile)
@@ -87,6 +107,7 @@ func (m *Model) Delete() tea.Msg {
 	selectedItem := m.lists[m.focused].SelectedItem()
 	selectedTask := selectedItem.(Task)
 	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
+	m.Save()
 	return nil
 }
 
@@ -131,6 +152,7 @@ func (m *Model) MoveToNext() tea.Msg {
 	m.lists[selectedTask.status].RemoveItem(m.lists[m.focused].Index())
 	selectedTask.Next()
 	m.lists[selectedTask.status].InsertItem(len(m.lists[selectedTask.status].Items()), list.Item(selectedTask))
+	m.Save()
 	return nil
 }
 
@@ -215,7 +237,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case Task:
 		task := msg
-		return m, m.lists[task.status].InsertItem(len(m.lists[task.status].Items()), task)
+		m.lists[task.status].InsertItem(len(m.lists[task.status].Items()), task)
+		m.Save()
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.lists[m.focused], cmd = m.lists[m.focused].Update(msg)
