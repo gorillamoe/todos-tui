@@ -1,12 +1,24 @@
-project_name: todos
 builds:
-  - env: [CGO_ENABLED=0]
-    goos:
-      - linux
-      - windows
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-  - main: ./src/
-  - binary: todos
+- env:
+  - CGO_ENABLED=0
+  main: './src/'
+  binary: 'todos'
+  goos:
+    - linux
+    - windows
+    - darwin
+  goarch:
+    - amd64
+    - arm
+    - arm64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+
