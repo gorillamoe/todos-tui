@@ -1,0 +1,22 @@
+project_name: todos
+builds:
+  - env: [CGO_ENABLED=0]
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+  - main: ./src/
+  - binary: todos
+nfpms:
+- maintainer: Marco Kellershoff <marco@kellershoff.net>
+  description: The best Todos TUI app!
+  homepage: https://github.com/walialu/todos-tui
+  license: MIT
+  formats:
+  - deb
+  - rpm
+  - apk
+
